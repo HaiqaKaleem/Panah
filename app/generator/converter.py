@@ -1,5 +1,11 @@
+
 from app.generator.schemas import GenerationCandidate
-from app.schemas.design_version import CanonicalDesignVersion, DesignMember
+from app.schemas.design_version import (
+    CanonicalDesignVersion,
+    DesignConnection,
+    DesignMember,
+    DesignMetadata,
+)
 
 
 def candidate_to_design_version(
@@ -8,12 +14,13 @@ def candidate_to_design_version(
     version: str,
 ) -> CanonicalDesignVersion:
     """
-    Convert provider/local candidate data into Panah's canonical design model.
+    Convert a provider-independent generation candidate into
+    Panah's canonical design representation.
 
-    This is the application-owned boundary: once converted, downstream
-    geometry and validation operate on CanonicalDesignVersion rather than
-    generator-specific objects.
+    This is the application-owned boundary between generation
+    and downstream geometry/validation systems.
     """
+
     members = [
         DesignMember(
             id=member.id,
@@ -26,12 +33,13 @@ def candidate_to_design_version(
     ]
 
     connections = [
-        {
-            "a": connection.a,
-            "b": connection.b,
-            "type": connection.type,
-        }
-        for connection in candidate.connections
+        DesignConnection(
+            id=f"C-{index + 1:03d}",
+            a=connection.a,
+            b=connection.b,
+            type=connection.type,
+        )
+        for index, connection in enumerate(candidate.connections)
     ]
 
     return CanonicalDesignVersion(
@@ -42,4 +50,8 @@ def candidate_to_design_version(
         height_m=candidate.height_m,
         members=members,
         connections=connections,
+        metadata=DesignMetadata(
+            generator_name=candidate.generation_method,
+            generator_version="1.0.0",
+        ),
     )

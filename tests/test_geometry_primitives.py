@@ -1,3 +1,4 @@
+
 import pytest
 
 from app.geometry.builder import build_geometry
@@ -34,6 +35,10 @@ def make_design():
             make_member("M2", "brace", 2.3),
         ],
         connections=[],
+        metadata={
+            "generator_name": "test-generator",
+            "generator_version": "1.0",
+        },
     )
 
 
@@ -59,7 +64,10 @@ def test_brace_becomes_geometry_primitive():
 def test_builder_preserves_component_ids():
     result = build_geometry(make_design())
 
-    assert [p.component_id for p in result.primitives] == ["M1", "M2"]
+    assert [p.component_id for p in result.primitives] == [
+        "M1",
+        "M2",
+    ]
 
 
 def test_builder_preserves_material_ids():

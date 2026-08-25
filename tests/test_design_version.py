@@ -8,7 +8,7 @@ def valid_design():
     return {
         "schema_version": "1.0.0",
         "design_type": "roof_truss",
-        "version": 1,
+        "version": "DV-001",
         "span_m": 4.2,
         "height_m": 1.0,
         "members": [

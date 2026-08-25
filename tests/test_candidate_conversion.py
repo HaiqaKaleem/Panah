@@ -65,12 +65,12 @@ def test_connections_survive_conversion():
     design = candidate_to_design_version(candidate, version="DV-003")
 
     assert [
-        (c["a"], c["b"], c["type"])
-        for c in design.connections
-    ] == [
-        (c.a, c.b, c.type)
-        for c in candidate.connections
-    ]
+    (c.a, c.b, c.type)
+    for c in design.connections
+] == [
+    (c.a, c.b, c.type)
+    for c in candidate.connections
+]
 
 
 def test_conversion_does_not_modify_candidate():

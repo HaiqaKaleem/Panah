@@ -78,7 +78,7 @@ class CanonicalDesignVersion(BaseModel):
 
     schema_version: str = Field(default="1.0.0", min_length=1, max_length=20)
     design_type: DesignType
-    version: int = Field(default=1, ge=1)
+    version: str = Field(default="DV-001", min_length=1, max_length=100)
     span_m: float = Field(gt=0, le=100)
     height_m: float = Field(gt=0, le=100)
     footprint: DesignDimensions | None = None
