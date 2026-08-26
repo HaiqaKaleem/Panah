@@ -9,6 +9,7 @@ from app.api.analysis import router as analysis_router
 from app.api.site_profiles import router as site_profiles_router
 from app.api.design_specifications import router as design_specifications_router
 from app.api.design_candidates import router as design_candidates_router
+from app.api.design_versions import router as design_versions_router
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Panagah API", version="0.4.0")
@@ -20,6 +21,9 @@ app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(site_profiles_router, prefix="/api/v1")
 app.include_router(design_specifications_router, prefix="/api/v1")
 app.include_router(design_candidates_router, prefix="/api/v1")
+app.include_router(design_specifications_router, prefix="/api/v1")
+app.include_router(design_candidates_router, prefix="/api/v1")
+app.include_router(design_versions_router, prefix="/api/v1")
 
 @app.get("/health", tags=["System"])
 def health():

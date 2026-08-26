@@ -9,3 +9,5 @@ from app.models.site_profile import SiteProfile
 from app.models.design_specification import DesignSpecification
 
 from app.models.design_candidate import DesignCandidate
+
+from app.models.design_version import DesignVersion
