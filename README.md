@@ -7,8 +7,8 @@
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0+-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white)
-![Tests](https://img.shields.io/badge/Tests-417-passing-brightgreen?style=flat-square)
-![Endpoints](https://img.shields.io/badge/Endpoints-115+-blue?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-519-passing-brightgreen?style=flat-square)
+![Endpoints](https://img.shields.io/badge/Endpoints-177+-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 ---
@@ -145,7 +145,7 @@ Project ──▶ Site ──▶ Capture ──▶ Media ──▶ Observations 
 | **PDF Generation** | fpdf2 |
 | **AI Provider** | Mock provider (MVP) / Alibaba Cloud Qwen (production) |
 | **Storage** | Local filesystem (MVP) / Alibaba Cloud OSS (production) |
-| **Testing** | pytest + httpx (417 tests) |
+| **Testing** | pytest + httpx (519 tests) |
 
 ---
 
@@ -219,7 +219,7 @@ xdg-open docs/viewer3d.html
 ```
 Panah/
 ├── app/
-│   ├── api/                    # FastAPI routers (115+ endpoints)
+│   ├── api/                    # FastAPI routers (177+ endpoints)
 │   │   ├── projects.py         # CRUD + stats
 │   │   ├── sites.py            # Site management + status transitions
 │   │   ├── media.py            # Photo/video upload, dedup, serving
@@ -363,7 +363,7 @@ Panah/
 │   ├── blueprint.txt           # Implementation blueprint
 │   └── screenshots/            # UI screenshots
 │
-├── tests/                      # Test suite (417 tests)
+├── tests/                      # Test suite (519 tests)
 │   ├── test_e2e_pipeline.py    # End-to-end pipeline
 │   ├── test_engineering.py     # Engineering modules (40 tests)
 │   ├── test_platform.py        # Platform services (36 tests)
@@ -382,7 +382,7 @@ Panah/
 
 ## API Reference
 
-All endpoints are prefixed with `/api/v1`. Total: **115+ endpoints across 30 routers**.
+All endpoints are prefixed with `/api/v1`. Total: **177+ endpoints across 43 routers**.
 
 ### Projects
 
@@ -745,7 +745,7 @@ Open `docs/viewer3d.html` in any modern browser for an interactive Three.js work
 
 ## Testing
 
-**417 tests** across 13 test files, all passing.
+**519 tests** across 17 test files, all passing.
 
 ```bash
 # Run all tests
