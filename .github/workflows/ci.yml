@@ -113,6 +113,16 @@ jobs:
             -p 8000:8000 \
             -e ENVIRONMENT=testing \
             panagah:latest
-          sleep 5
-          curl -f http://localhost:8000/health || exit 1
+          # Wait up to 30s for health check
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Health check passed on attempt $i"
+              docker stop panagah-test
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Health check failed after 30s"
+          docker logs panagah-test
           docker stop panagah-test
+          exit 1
