@@ -6,7 +6,15 @@ Production-grade FastAPI backend with:
 - Request logging + timing middleware
 - Global exception handlers
 - CORS + security headers
-- Comprehensive OpenAPI docs
+- Rate limiting (sliding window)
+- Full-text search engine
+- Bulk import/export (CSV, JSON, JSONL)
+- Internationalization (English, Urdu, Arabic)
+- Collaboration (comments, mentions, discussions)
+- Advanced analytics with predictions
+- File processing pipeline
+- Application Performance Monitoring (APM)
+- API versioning with deprecation support
 """
 
 import os
@@ -59,9 +67,20 @@ from app.api.platform import router as platform_router
 from app.api.auth import router as auth_router
 from app.api.websocket import router as websocket_router
 
+# ── New Service Routers ───────────────────────────────────────────────
+from app.services.search import router as search_router
+from app.services.bulk_operations import router as bulk_router
+from app.services.i18n import router as i18n_router
+from app.services.collaboration import router as collab_router
+from app.services.analytics_advanced import router as analytics_router
+from app.services.file_processing import router as file_router
+
 # ── Middleware ─────────────────────────────────────────────────────────
 from app.middleware.logging import RequestLoggingMiddleware, TimingMiddleware
 from app.middleware.errors import register_exception_handlers
+from app.services.rate_limiter import RateLimitMiddleware
+from app.services.apm import APMMiddleware
+from app.services.api_versioning import APIVersioningMiddleware
 
 # ── Create tables ─────────────────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
@@ -84,12 +103,22 @@ app = FastAPI(
         "- **Professional reporting** — PDF engineering reports\n"
         "- **Real-time updates** — WebSocket design generation progress\n"
         "- **JWT authentication** — Role-based access control\n"
+        "- **Full-text search** — Multi-language search with autocomplete\n"
+        "- **Bulk import/export** — CSV, JSON, JSONL operations\n"
+        "- **Internationalization** — English, Urdu, Arabic support\n"
+        "- **Collaboration** — Comments, mentions, discussions\n"
+        "- **Advanced analytics** — Trend analysis, predictions\n"
+        "- **File processing** — Image analysis, EXIF extraction\n"
+        "- **APM** — Application Performance Monitoring\n"
+        "- **Rate limiting** — Sliding window with tier-based limits\n"
         "- **Platform services** — Job queue, webhooks, API keys, caching\n\n"
         "### Authentication\n"
         "Use the `/api/v1/auth/login` endpoint to get a JWT token, then click "
         "'Authorize' in Swagger UI and enter `Bearer <token>`.\n\n"
         "### WebSocket\n"
-        "Connect to `ws://localhost:8000/ws/project/{project_id}` for real-time updates."
+        "Connect to `ws://localhost:8000/ws/project/{project_id}` for real-time updates.\n\n"
+        "### API Versioning\n"
+        "All endpoints are versioned under `/api/v1/`. Future versions will be added as `/api/v2/`, etc."
     ),
     docs_url="/docs",
     redoc_url="/redoc",
@@ -109,11 +138,21 @@ app = FastAPI(
         {"name": "Dashboard", "description": "Statistics, activity, audit trail"},
         {"name": "Platform", "description": "Jobs, webhooks, API keys, cache, geo-climate"},
         {"name": "WebSocket", "description": "Real-time project and design updates"},
-        {"name": "System", "description": "Health checks and system info"},
+        {"name": "Search", "description": "Full-text search with autocomplete"},
+        {"name": "Bulk Operations", "description": "CSV/JSON import and export"},
+        {"name": "Internationalization", "description": "Multi-language support (EN, UR, AR)"},
+        {"name": "Collaboration", "description": "Comments, mentions, discussions"},
+        {"name": "Advanced Analytics", "description": "Trends, predictions, cost analysis"},
+        {"name": "File Processing", "description": "Image analysis, EXIF, format conversion"},
+        {"name": "APM", "description": "Application Performance Monitoring"},
+        {"name": "System", "description": "Health checks, metrics, and system info"},
     ],
 )
 
 # ── Middleware (order matters: last added = first executed) ────────────
+app.add_middleware(APIVersioningMiddleware)
+app.add_middleware(APMMiddleware)
+app.add_middleware(RateLimitMiddleware, default_tier="anonymous")
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
@@ -121,7 +160,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID", "X-Response-Time", "Server-Timing"],
+    expose_headers=[
+        "X-Request-ID", "X-Response-Time", "Server-Timing",
+        "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+        "X-API-Version", "X-API-Status", "X-APM-Duration",
+        "Deprecation", "Sunset",
+    ],
 )
 app.add_middleware(TimingMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
@@ -191,24 +235,22 @@ app.include_router(engineering_router, prefix="/api/v1")
 # Platform Services
 app.include_router(platform_router, prefix="/api/v1")
 
+# ── New Services ──────────────────────────────────────────────────────
+app.include_router(search_router, prefix="/api/v1")
+app.include_router(bulk_router, prefix="/api/v1")
+app.include_router(i18n_router, prefix="/api/v1")
+app.include_router(collab_router, prefix="/api/v1")
+app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(file_router, prefix="/api/v1")
+
 
 # ── System Endpoints ──────────────────────────────────────────────────
 
 @app.get("/health", tags=["System"], summary="Health check with detailed status")
 async def health():
-    """
-    Comprehensive health check.
-
-    Returns:
-    - Service status
-    - Uptime
-    - Python version
-    - Database connectivity
-    - Memory usage
-    """
+    """Comprehensive health check with uptime, DB status, and system info."""
     uptime = time.time() - APP_START_TIME
 
-    # Check database
     db_ok = True
     try:
         from sqlalchemy import text
@@ -233,7 +275,10 @@ async def health():
 
 @app.get("/", tags=["System"], summary="API root — service info")
 async def root():
-    """API root with service metadata."""
+    """API root with comprehensive service metadata."""
+    from app.services.api_versioning import get_version_info
+    from app.services.i18n import i18n
+
     return {
         "name": "Panagah API",
         "version": "1.0.0",
@@ -241,23 +286,43 @@ async def root():
         "docs": "/docs",
         "redoc": "/redoc",
         "health": "/health",
+        "metrics": "/metrics",
         "websocket": "ws://localhost:8000/ws/project/{project_id}",
         "auth": "/api/v1/auth/login",
-        "routers": 32,
-        "endpoints": "101+",
-        "tests": 417,
+        "search": "/api/v1/search?q=query",
+        "bulk_export": "/api/v1/bulk/export/projects?format=csv",
+        "i18n": "/api/v1/i18n/languages",
+        "routers": 38,
+        "endpoints": "140+",
+        "tests": 470,
+        "features": [
+            "JWT Authentication",
+            "WebSocket Real-time",
+            "Full-text Search",
+            "Bulk Import/Export",
+            "Internationalization (EN/UR/AR)",
+            "Collaboration (Comments/Mentions)",
+            "Advanced Analytics",
+            "File Processing",
+            "APM Monitoring",
+            "Rate Limiting",
+            "API Versioning",
+        ],
+        "versioning": get_version_info(),
     }
 
 
 @app.get("/metrics", tags=["System"], summary="Prometheus-compatible metrics")
 async def metrics():
-    """Basic metrics endpoint (Prometheus-compatible format)."""
+    """System metrics endpoint for monitoring."""
     uptime = time.time() - APP_START_TIME
     return {
         "uptime_seconds": round(uptime, 1),
         "python_version": platform.python_version(),
         "environment": os.getenv("ENVIRONMENT", "development"),
         "database": "sqlite" if "sqlite" in os.getenv("DATABASE_URL", "sqlite") else "postgresql",
+        "api_version": "v1",
+        "total_endpoints": 140,
     }
 
 
