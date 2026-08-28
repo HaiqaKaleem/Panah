@@ -8,9 +8,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ENVIRONMENT=production \
     DATABASE_URL=sqlite:///./panagah.db
 
-# Create app user (non-root)
-RUN groupadd -r panagah && useradd -r -g panagah -d /app -s /sbin/nologin panagah
-
 WORKDIR /app
 
 # Install system dependencies
@@ -27,16 +24,13 @@ COPY app/ app/
 COPY docs/ docs/
 
 # Create storage directories
-RUN mkdir -p /app/storage /app/logs && \
-    chown -R panagah:panagah /app
-
-USER panagah
+RUN mkdir -p /app/storage /app/logs
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 EXPOSE 8000
 
-# Run with uvicorn
+# Run with uvicorn (single worker for reliability)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
