@@ -74,6 +74,10 @@ from app.services.i18n import router as i18n_router
 from app.services.collaboration import router as collab_router
 from app.services.analytics_advanced import router as analytics_router
 from app.services.file_processing import router as file_router
+from app.services.gis_mapping import router as gis_router
+from app.services.climate_data import router as climate_router
+from app.services.offline_sync import router as offline_router
+from app.services.visualization import router as charts_router
 
 # ── Middleware ─────────────────────────────────────────────────────────
 from app.middleware.logging import RequestLoggingMiddleware, TimingMiddleware
@@ -242,6 +246,10 @@ app.include_router(i18n_router, prefix="/api/v1")
 app.include_router(collab_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(file_router, prefix="/api/v1")
+app.include_router(gis_router, prefix="/api/v1")
+app.include_router(climate_router, prefix="/api/v1")
+app.include_router(offline_router, prefix="/api/v1")
+app.include_router(charts_router, prefix="/api/v1")
 
 
 # ── System Endpoints ──────────────────────────────────────────────────
