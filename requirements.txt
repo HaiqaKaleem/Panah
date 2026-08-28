@@ -1,10 +1,26 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-pydantic
-pydantic-settings
-pytest
-httpx
-python-multipart
+# ── Core ───────────────────────────────────────────────────────────────
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+sqlalchemy>=2.0.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+pydantic[email]>=2.0.0
 
-Pillow
+# ── Authentication ────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# ── Testing ───────────────────────────────────────────────────────────
+pytest>=7.4.0
+pytest-cov>=4.1.0
+httpx>=0.25.0
+
+# ── PDF Generation ────────────────────────────────────────────────────
+fpdf2>=2.7.0
+
+# ── Image Processing ──────────────────────────────────────────────────
+Pillow>=10.0.0
+
+# ── YAML Rules ────────────────────────────────────────────────────────
+pyyaml>=6.0.0
