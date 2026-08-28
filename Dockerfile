@@ -4,7 +4,9 @@ FROM python:3.11-slim AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    ENVIRONMENT=production \
+    DATABASE_URL=sqlite:///./panagah.db
 
 # Create app user (non-root)
 RUN groupadd -r panagah && useradd -r -g panagah -d /app -s /sbin/nologin panagah
@@ -13,7 +15,7 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
