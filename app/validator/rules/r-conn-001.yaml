@@ -1,0 +1,16 @@
+id: R-CONN-001
+name: Connection type supported
+description: "All declared connections must use a supported connection type."
+category: connections
+severity: hard
+reference: "Sphere Handbook 24.1 §4.2 Structural Connections"
+tags: [connections, structural, sphere-handbook]
+
+rule:
+  method: min_length
+  field: design.connections
+  min_length: 1
+
+messages:
+  pass: "Connections are defined"
+  fail: "No connections defined — load path cannot be established"

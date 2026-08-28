@@ -107,3 +107,40 @@ def delete_project(
 
     db.delete(project)
     db.commit()
+
+
+@router.get("/{project_id}/stats")
+def get_project_stats(project_id: int, db: Session = Depends(get_db)): 
+    """Return project-level statistics for the dashboard."""
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.models.site import Site
+    from app.models.material import Material
+    from app.models.design_candidate import DesignCandidate
+    from app.models.design_version import DesignVersion
+    from app.models.generated_design import GeneratedDesign
+
+    site_count = db.query(Site).filter(Site.project_id == project_id).count()
+    material_count = db.query(Material).filter(Material.project_id == project_id).count()
+
+    site_ids = [s.id for s in db.query(Site.id).filter(Site.project_id == project_id).all()]
+
+    candidate_count = 0
+    design_version_count = 0
+    generated_design_count = 0
+    if site_ids:
+        candidate_count = db.query(DesignCandidate).filter(DesignCandidate.site_id.in_(site_ids)).count()
+        design_version_count = db.query(DesignVersion).filter(DesignVersion.site_id.in_(site_ids)).count()
+        generated_design_count = db.query(GeneratedDesign).filter(GeneratedDesign.site_id.in_(site_ids)).count()
+
+    return {
+        "project_id": project_id,
+        "name": project.name,
+        "site_count": site_count,
+        "material_count": material_count,
+        "candidate_count": candidate_count,
+        "design_version_count": design_version_count,
+        "generated_design_count": generated_design_count,
+    }

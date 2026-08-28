@@ -32,6 +32,12 @@ from enum import Enum
 from typing import Any, Mapping
 
 from app.constraints.schemas import ConstraintSet
+from app.structural.analysis import (
+    REQUIRED_LIFESPAN_MONTHS,
+    REQUIRED_SNOW_KG_M2,
+    REQUIRED_WIND_KMH,
+    StructuralAnalysisResult,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -445,84 +451,172 @@ def _evaluate_material_rule(constraints: ConstraintSet) -> RuleResult:
     )
 
 
-def _evaluate_wind_rule(constraints: ConstraintSet) -> RuleResult:
+def _evaluate_wind_rule(
+    constraints: ConstraintSet,
+    analysis: StructuralAnalysisResult | None = None,
+) -> RuleResult:
     del constraints
 
     rule = get_rule("SPHERE-TECH-WIND-001")
 
+    if analysis is None or not analysis.analyzable or analysis.wind_capacity_kmh is None:
+        return _make_result(
+            rule,
+            RuleStatus.NOT_EVALUATED,
+            (
+                "Wind resistance requires structural analysis or field "
+                "verification; the current ConstraintSet contains no wind "
+                "capacity result."
+            ),
+            {
+                "required_sustained_wind_kmh": REQUIRED_WIND_KMH,
+                "comparison": "greater_than",
+                "analysis_required": True,
+            },
+        )
+
+    passed = analysis.wind_capacity_kmh > REQUIRED_WIND_KMH
     return _make_result(
         rule,
-        RuleStatus.NOT_EVALUATED,
+        RuleStatus.PASS if passed else RuleStatus.FAIL,
         (
-            "Wind resistance requires structural analysis or field "
-            "verification; the current ConstraintSet contains no wind "
-            "capacity result."
+            f"Bracing supports an estimated {analysis.wind_capacity_kmh:.1f} km/h "
+            f"sustained wind vs. the required {REQUIRED_WIND_KMH:.0f} km/h."
+            if passed
+            else (
+                f"Estimated wind capacity of {analysis.wind_capacity_kmh:.1f} km/h "
+                f"falls short of the required {REQUIRED_WIND_KMH:.0f} km/h "
+                f"(demand {analysis.wind_demand_n:.0f} N vs. capacity "
+                f"{analysis.wind_capacity_n:.0f} N)."
+            )
         ),
         {
-            "required_sustained_wind_kmh": 120,
+            "required_sustained_wind_kmh": REQUIRED_WIND_KMH,
+            "estimated_wind_capacity_kmh": round(analysis.wind_capacity_kmh, 1),
+            "wind_demand_n": round(analysis.wind_demand_n or 0.0, 1),
+            "wind_capacity_n": round(analysis.wind_capacity_n or 0.0, 1),
             "comparison": "greater_than",
-            "analysis_required": True,
         },
     )
 
 
-def _evaluate_snow_rule(constraints: ConstraintSet) -> RuleResult:
+def _evaluate_snow_rule(
+    constraints: ConstraintSet,
+    analysis: StructuralAnalysisResult | None = None,
+) -> RuleResult:
     del constraints
 
     rule = get_rule("SPHERE-TECH-SNOW-001")
 
+    if analysis is None or not analysis.analyzable or analysis.live_load_capacity_kg_m2 is None:
+        return _make_result(
+            rule,
+            RuleStatus.NOT_EVALUATED,
+            (
+                "Snow-load capacity requires load-capacity evidence; the "
+                "current ConstraintSet contains no snow-load result."
+            ),
+            {
+                "required_snow_load_kg_m2": REQUIRED_SNOW_KG_M2,
+                "comparison": "greater_than",
+                "analysis_required": True,
+            },
+        )
+
+    passed = analysis.live_load_capacity_kg_m2 >= REQUIRED_SNOW_KG_M2
     return _make_result(
         rule,
-        RuleStatus.NOT_EVALUATED,
+        RuleStatus.PASS if passed else RuleStatus.FAIL,
         (
-            "Snow-load capacity requires load-capacity evidence; the "
-            "current ConstraintSet contains no snow-load result."
+            f"Governing member supports {analysis.live_load_capacity_kg_m2:.1f} kg/m\u00b2 "
+            f"vs. the required {REQUIRED_SNOW_KG_M2:.0f} kg/m\u00b2."
         ),
         {
-            "required_snow_load_kg_m2": 50,
-            "comparison": "greater_than",
-            "analysis_required": True,
+            "required_snow_load_kg_m2": REQUIRED_SNOW_KG_M2,
+            "estimated_live_load_capacity_kg_m2": round(
+                analysis.live_load_capacity_kg_m2, 1
+            ),
+            "governing_member_id": analysis.governing_member_id,
+            "comparison": "greater_than_or_equal",
         },
     )
 
 
-def _evaluate_lifespan_rule(constraints: ConstraintSet) -> RuleResult:
+def _evaluate_lifespan_rule(
+    constraints: ConstraintSet,
+    analysis: StructuralAnalysisResult | None = None,
+) -> RuleResult:
     del constraints
 
     rule = get_rule("SPHERE-TECH-LIFE-001")
 
+    if analysis is None or not analysis.analyzable or analysis.lifespan_months is None:
+        return _make_result(
+            rule,
+            RuleStatus.NOT_EVALUATED,
+            (
+                "Shelter lifespan requires material durability or monitoring "
+                "evidence; the current ConstraintSet contains no lifespan result."
+            ),
+            {
+                "minimum_lifespan_months": REQUIRED_LIFESPAN_MONTHS,
+                "comparison": "greater_than_or_equal",
+                "evidence_required": True,
+            },
+        )
+
+    passed = analysis.lifespan_months >= REQUIRED_LIFESPAN_MONTHS
     return _make_result(
         rule,
-        RuleStatus.NOT_EVALUATED,
+        RuleStatus.PASS if passed else RuleStatus.FAIL,
         (
-            "Shelter lifespan requires material durability or monitoring "
-            "evidence; the current ConstraintSet contains no lifespan result."
+            f"Shortest-lived material used has an estimated {analysis.lifespan_months:.0f} "
+            f"month lifespan vs. the required {REQUIRED_LIFESPAN_MONTHS:.0f} months."
         ),
         {
-            "minimum_lifespan_months": 6,
+            "minimum_lifespan_months": REQUIRED_LIFESPAN_MONTHS,
+            "estimated_lifespan_months": round(analysis.lifespan_months, 1),
             "comparison": "greater_than_or_equal",
-            "evidence_required": True,
         },
     )
 
 
-def _evaluate_bracing_rule(constraints: ConstraintSet) -> RuleResult:
+def _evaluate_bracing_rule(
+    constraints: ConstraintSet,
+    analysis: StructuralAnalysisResult | None = None,
+) -> RuleResult:
     del constraints
 
     rule = get_rule("SPHERE-STRUCT-BRACE-001")
 
+    if analysis is None or not analysis.analyzable:
+        return _make_result(
+            rule,
+            RuleStatus.NOT_EVALUATED,
+            (
+                "Cross-bracing cannot yet be verified because the current "
+                "ConstraintSet contains no bracing geometry or structural "
+                "calculation matrix."
+            ),
+            {
+                "required_wall_planes": 2,
+                "analysis_required": True,
+            },
+        )
+
+    if not analysis.bracing_present:
+        return _make_result(
+            rule,
+            RuleStatus.FAIL,
+            "No brace members are present in the generated design; lateral wind loads are unresisted.",
+            {"required_wall_planes": 2, "bracing_present": False},
+        )
+
     return _make_result(
         rule,
-        RuleStatus.NOT_EVALUATED,
-        (
-            "Cross-bracing cannot yet be verified because the current "
-            "ConstraintSet contains no bracing geometry or structural "
-            "calculation matrix."
-        ),
-        {
-            "required_wall_planes": 2,
-            "analysis_required": True,
-        },
+        RuleStatus.PASS,
+        "Brace members are present and their combined axial capacity was used in the wind-load check.",
+        {"required_wall_planes": 2, "bracing_present": True},
     )
 
 
@@ -533,20 +627,26 @@ def _evaluate_bracing_rule(constraints: ConstraintSet) -> RuleResult:
 
 def evaluate_structural_rules(
     constraints: ConstraintSet,
+    analysis: StructuralAnalysisResult | None = None,
 ) -> list[RuleResult]:
     """
     Evaluate all currently supported structural prescreen rules.
 
     The order is intentionally stable because the frontend can present
     the resulting rule cards in standards-document order.
+
+    `analysis` is optional. Without it, the wind/snow/lifespan/bracing
+    rules remain NOT_EVALUATED exactly as before (backward compatible).
+    When a StructuralAnalysisResult is supplied, those four rules are
+    evaluated against its figures.
     """
     return [
         _evaluate_hazard_rule(constraints),
         _evaluate_material_rule(constraints),
-        _evaluate_wind_rule(constraints),
-        _evaluate_snow_rule(constraints),
-        _evaluate_lifespan_rule(constraints),
-        _evaluate_bracing_rule(constraints),
+        _evaluate_wind_rule(constraints, analysis),
+        _evaluate_snow_rule(constraints, analysis),
+        _evaluate_lifespan_rule(constraints, analysis),
+        _evaluate_bracing_rule(constraints, analysis),
     ]
 
 
@@ -572,13 +672,16 @@ def summarize_results(
     )
 
 
-def evaluate_rules(constraints: ConstraintSet) -> StandardsEvaluation:
+def evaluate_rules(
+    constraints: ConstraintSet,
+    analysis: StructuralAnalysisResult | None = None,
+) -> StandardsEvaluation:
     """
     Public standards-engine entry point.
 
     Returns both individual rule results and an aggregate summary.
     """
-    results = evaluate_structural_rules(constraints)
+    results = evaluate_structural_rules(constraints, analysis)
     summary = summarize_results(results)
 
     return StandardsEvaluation(

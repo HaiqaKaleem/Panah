@@ -41,9 +41,9 @@ class DesignVersion(Base):
         index=True,
     )
 
-    design_specification_id: Mapped[int] = mapped_column(
+    design_specification_id: Mapped[int | None] = mapped_column(
         ForeignKey("design_specifications.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 

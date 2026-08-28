@@ -1,193 +1,231 @@
-# Panagah API — Step 2: Site + Capture
+# Panagah (پناگاہ) — Humanitarian Shelter Assessment & Design Platform
 
-This step adds ONLY two new concepts:
+A constraint-driven generative design system for humanitarian shelter assessment. Panagah collects field requirements, converts them into canonical constraint models, generates structured shelter-component candidates, builds parametric 3D geometry, and independently evaluates designs through a deterministic validation engine before presenting evidence to a human engineer.
 
-1. Site
-2. Capture session
+## Architecture
 
-No media uploads, AI analysis, observations, materials, validation, or design generation are included yet.
+```
+Project → Site → Capture → Media → Observations / AI Analysis
+Site → SiteProfile (draft→ready) + DesignSpecification (draft→ready)
+        └──→ DesignGenerator → DesignCandidate → DesignVersion
+ConstraintSet → LocalGenerationService → GenerationCandidate → DesignVersion
+DesignVersion → StructuralAnalysis → Findings
+DesignVersion → GeometryBuilder → Primitives
+DesignVersion → Validation → EngineerReview
+```
 
-## Relationship
+### Key Design Principles
 
-Project
-  └── Site
-       └── Capture
+- **Safety separation** — Generation never claims engineering safety; analysis, standards, and compliance are separate layers
+- **Provider protocols** — AI and design generators use Protocol classes with mock implementations for MVP
+- **Deterministic prescreening** — Rules use `NOT_EVALUATED` for missing evidence (never fake a pass)
+- **Schema strictness** — All Pydantic models use `extra="forbid"` to reject unexpected fields
+- **Content deduplication** — SHA-256 prevents duplicate uploads to same capture
+- **Path traversal protection** — Storage keys validated to never escape root
 
-A Site is the physical case being assessed.
+## Setup
 
-A Capture is one field visit/session. Photos and videos will be attached to a Capture in the next step.
+### Prerequisites
 
-## Site endpoints
+- Python 3.11+
+- pip
 
-POST   /api/v1/projects/{project_id}/sites
-GET    /api/v1/projects/{project_id}/sites
-GET    /api/v1/projects/{project_id}/sites/{site_id}
-PATCH  /api/v1/projects/{project_id}/sites/{site_id}
+### Installation
 
-## Capture endpoints
+```bash
+# Clone the repository
+git clone <repo-url>
+cd Panah
 
-POST   /api/v1/projects/{project_id}/sites/{site_id}/captures
-GET    /api/v1/projects/{project_id}/sites/{site_id}/captures
-GET    /api/v1/projects/{project_id}/sites/{site_id}/captures/{capture_id}
+# Create virtual environment
+python -m venv .venv
 
-## Important design choice
+# Activate (Windows)
+.venv\Scripts\activate
 
-A Site does NOT contain photos/videos directly.
+# Or activate (macOS/Linux)
+source .venv/bin/activate
 
-The structure is:
+# Install dependencies
+pip install -r requirements.txt
+```
 
-Project → Site → Capture → Media
+### Running the Server
 
-This preserves the context of each field visit and lets the same site have multiple assessment sessions.
+```bash
+uvicorn app.main:app --reload
+```
 
-## Current Site fields
+The API will be available at `http://localhost:8000`
 
-- id
-- project_id
-- name
-- latitude (optional)
-- longitude (optional)
-- status
-- created_at
-- updated_at
+### Running Tests
 
-## Current Capture fields
+```bash
+python -m pytest tests/ -v
+```
 
-- id
-- site_id
-- captured_at
-- latitude (optional)
-- longitude (optional)
-- status
-- notes (optional)
-- created_at
+## API Reference
 
-## Not implemented yet
+All endpoints are under `/api/v1`.
 
-- file upload/storage
-- photo/video records
-- thumbnails
-- AI/CV analysis
-- detected objects
-- site observations
-- human confirmation
-- measurements
-- material inventory
+### Projects
 
-Those are deliberately separate next steps.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects` | Create a new project |
+| GET | `/projects` | List all projects |
+| GET | `/projects/{id}` | Get project by ID |
+| PATCH | `/projects/{id}` | Update project |
+| DELETE | `/projects/{id}` | Delete project |
 
+### Sites
 
-## Step 5 — Metadata Extraction
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites` | Create a site |
+| GET | `/projects/{id}/sites` | List sites |
+| GET | `/projects/{id}/sites/{id}` | Get site |
+| PATCH | `/projects/{id}/sites/{id}` | Update site |
 
-Media now receives a technical/embedded metadata extraction pass after upload.
+### Captures
 
-### Images
-- width / height
-- format / mode
-- EXIF fields
-- EXIF GPS when present
-- embedded capture timestamp when present
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites/{id}/captures` | Create capture session |
+| GET | `/projects/{id}/sites/{id}/captures` | List captures |
+| GET | `/projects/{id}/sites/{id}/captures/{id}` | Get capture |
 
-### Videos
-- format
-- dimensions / FPS / duration when an optional video reader is available
+### Media
 
-### Design guarantees
-- original file is never modified
-- extracted metadata is stored separately
-- failed extraction does not invalidate the evidence file
-- metadata extraction does not perform AI interpretation
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites/{id}/captures/{id}/media` | Upload photo/video |
+| GET | `/projects/{id}/sites/{id}/captures/{id}/media` | List media |
+| GET | `/projects/{id}/sites/{id}/captures/{id}/media/{id}` | Get media info |
+| GET | `/projects/{id}/sites/{id}/captures/{id}/media/{id}/file` | Serve original file |
 
+### Observations
 
-## Step 7 — Site Profile
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `.../media/{id}/observations` | Create observation |
+| GET | `.../media/{id}/observations` | List observations |
+| PATCH | `.../media/{id}/observations/{id}/status` | Confirm/reject |
 
-The Site Profile is the controlled bridge between visual observations and design generation.
+### AI Analysis
 
-It contains coordinator-reviewed site information:
-- terrain
-- visible objects/obstructions
-- access
-- available materials
-- visible conditions
-- geometry/measurements
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `.../media/{id}/analyze` | Run AI analysis |
 
-AI observations are not automatically treated as final site facts.
+### Materials
 
-Profile lifecycle:
-draft -> ready
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/materials` | Add material |
+| GET | `/projects/{id}/materials` | List materials |
+| GET | `/projects/{id}/materials/{id}` | Get material |
+| DELETE | `/projects/{id}/materials/{id}` | Delete material |
 
-A ready profile is the input contract for the future design-generation layer.
+### Site Profile
 
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/projects/{id}/sites/{id}/profile` | Get profile |
+| PUT | `/projects/{id}/sites/{id}/profile` | Save profile |
+| POST | `/projects/{id}/sites/{id}/profile/ready` | Mark ready |
 
-## Step 8 — Design Specification
+### Design Specification
 
-The Design Specification is the structured design request given to the future design generator.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/projects/{id}/sites/{id}/design-specification` | Get spec |
+| PUT | `/projects/{id}/sites/{id}/design-specification` | Save spec |
+| POST | `/projects/{id}/sites/{id}/design-specification/ready` | Mark ready |
 
-It is intentionally separate from the Site Profile:
+### Design Candidates
 
-- Site Profile = what is known about the site.
-- Design Specification = what the coordinator wants designed.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites/{id}/design-candidates/generate` | Generate candidate |
+| GET | `/projects/{id}/sites/{id}/design-candidates` | List candidates |
+| GET | `/projects/{id}/sites/{id}/design-candidates/{id}` | Get candidate |
+| PATCH | `/projects/{id}/sites/{id}/design-candidates/{id}/status` | Select/reject |
 
-Current fields:
-- family size
-- shelter type
-- required spaces
-- maximum footprint
-- maximum height
-- available materials
-- preferred materials
-- design priorities
-- coordinator notes
+### Design Versions
 
-Lifecycle:
-draft -> ready
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites/{id}/design-versions/from-candidate/{id}` | Create from candidate |
+| GET | `/projects/{id}/sites/{id}/design-versions` | List versions |
+| GET | `/projects/{id}/sites/{id}/design-versions/{id}` | Get version |
 
-Editing a ready specification automatically returns it to draft.
+### Validation
 
-The schema intentionally excludes structural safety, load capacity, wind resistance,
-material strength, and engineering approval. Those belong to later validation/review layers.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites/{id}/design-versions/{id}/validate` | Run validation |
+| GET | `/projects/{id}/sites/{id}/design-versions/{id}/validation` | Get validation runs |
 
+### Reviews
 
-## Step 9 — Design Generation Contract
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/projects/{id}/sites/{id}/design-versions/{id}/submit-review` | Submit for review |
+| POST | `/projects/{id}/sites/{id}/reviews/{id}/decision` | Record decision |
+| GET | `/projects/{id}/sites/{id}/design-versions/{id}/reviews` | List reviews |
 
-This step defines the output contract for a generated shelter candidate without implementing
-a real 3D/AI generator.
+## UI Screenshots
 
-Pipeline:
+| Screen | Description |
+|--------|-------------|
+| ![Dashboard](docs/screenshots/01_dashboard.jpeg) | **Dashboard** — Project overview and quick actions |
+| ![Requirements](docs/screenshots/02_requirements.jpeg) | **Requirements** — Family size, site dimensions, environment |
+| ![Materials](docs/screenshots/03_materials.jpeg) | **Materials** — Local material inventory |
+| ![Generation](docs/screenshots/04_generation.jpeg) | **Generation** — Candidate design generation |
+| ![3D Workspace](docs/screenshots/05_3d_workspace.jpeg) | **3D Workspace** — Interactive component inspection |
+| ![Validation](docs/screenshots/06_validation.jpeg) | **Validation** — Deterministic rule checking results |
+| ![Review](docs/screenshots/07_review.jpeg) | **Engineer Review** — Decision recording and audit |
 
-Ready Site Profile
-    +
-Ready Design Specification
-    ↓
-Design Generator
-    ↓
-Validated Candidate Contract
-    ↓
-Stored Design Candidate
-    ↓
-Future deterministic validation
+## Tech Stack
 
-A candidate contains:
-- candidate name
-- footprint
-- overall height
-- components
-- component types
-- material labels
-- 3D position
-- component dimensions
-- generation notes
+- **Backend:** Python + FastAPI + SQLAlchemy + Pydantic v2
+- **Database:** SQLite (development) / PostgreSQL (production)
+- **AI:** Mock provider (MVP) / Alibaba Cloud Qwen (production)
+- **Storage:** Local filesystem (MVP) / Alibaba Cloud OSS (production)
+- **Testing:** pytest + httpx
 
-Each candidate also stores an immutable input snapshot of the Site Profile and Design
-Specification used to create it. This makes generation reproducible and auditable.
+## Project Structure
 
-The current generator is a deterministic local mock/parametric generator. It is NOT AI
-and it does NOT perform structural validation or claim safety.
+```
+panah/
+├── app/
+│   ├── api/           # FastAPI routers (REST endpoints)
+│   ├── ai/            # AI vision provider protocol + mock
+│   ├── analysis/      # Structural analysis service
+│   ├── compliance/    # Compliance reporting
+│   ├── constraints/   # ConstraintSet schema + validator
+│   ├── core/          # Config + database
+│   ├── design/        # Design generator protocol + mock
+│   ├── generator/     # Local generation service
+│   ├── geometry/      # Geometry primitives + builder
+│   ├── metadata/      # EXIF/GPS extraction
+│   ├── models/        # SQLAlchemy ORM models
+│   ├── schemas/       # Pydantic request/response schemas
+│   ├── services/      # Business logic services
+│   └── storage/       # File storage abstraction
+├── docs/              # Documentation + screenshots
+├── tests/             # Test suite
+└── requirements.txt
+```
 
-The contract intentionally separates:
-- generation
-- validation
-- engineer approval
+## What This Is Not
 
-A future AI/optimization provider can replace the mock generator without changing the API
-or database contract.
+- A fully autonomous structural engineer
+- A replacement for professional engineering approval
+- A complete building-code certification engine
+- A full finite-element analysis platform
+
+## License
+
+Built for humanitarian shelter assessment. Use responsibly.

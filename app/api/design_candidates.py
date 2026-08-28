@@ -13,6 +13,7 @@ from app.schemas.design_candidate import (
     DesignCandidatePayload,
     DesignCandidateResponse,
 )
+from app.services.audit import log_event
 
 router = APIRouter(
     prefix="/projects/{project_id}/sites/{site_id}/design-candidates",
@@ -85,6 +86,20 @@ def generate_design_candidate(
     db.add(candidate)
     db.commit()
     db.refresh(candidate)
+
+    log_event(
+        db,
+        project_id=project_id,
+        action="design_candidate_generated",
+        object_type="design_candidate",
+        object_id=str(candidate.id),
+        details={
+            "site_id": site_id,
+            "generator": generator.name,
+            "specification_id": specification.id,
+        },
+    )
+    db.commit()
 
     return candidate
 
