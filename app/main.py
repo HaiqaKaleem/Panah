@@ -63,6 +63,7 @@ from app.api.load_combinations import router as load_combinations_router
 from app.api.notifications import router as notifications_router
 from app.api.design_validation import router as design_validation_router
 from app.api.engineering import router as engineering_router
+from app.api.engineering_advanced import router as engineering_advanced_router
 from app.api.platform import router as platform_router
 from app.api.auth import router as auth_router
 from app.api.websocket import router as websocket_router
@@ -235,6 +236,7 @@ app.include_router(design_validation_router, prefix="/api/v1")
 
 # Engineering Calculations
 app.include_router(engineering_router, prefix="/api/v1")
+app.include_router(engineering_advanced_router, prefix="/api/v1")
 
 # Platform Services
 app.include_router(platform_router, prefix="/api/v1")
