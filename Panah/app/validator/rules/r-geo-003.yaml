@@ -1,0 +1,16 @@
+id: R-GEO-003
+name: Minimum interior clearance
+description: "Design height must meet minimum clearance for habitable shelters."
+category: geometry
+severity: hard
+reference: "Sphere Handbook 24.1 — minimum standing clearance 2.0m"
+tags: [geometry, sphere-handbook]
+
+rule:
+  method: min_threshold
+  field: design.height_m
+  threshold: 2.0
+
+messages:
+  pass: "Interior clearance meets minimum requirement"
+  fail: "Design height ({value}m) is below 2.0m minimum clearance"

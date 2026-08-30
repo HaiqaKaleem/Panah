@@ -1,0 +1,292 @@
+PANAGAH
+Implementation Blueprint
+How the actual software will be built
+Version 1.0 • 17 August 2026 • Hackathon MVP
+Purpose of this documentThis is the engineering build document for Panagah. It intentionally avoids generic business-plan material. It defines the actual MVP architecture, data flow, services, schemas, generation pipeline, 3D representation, validation engine, APIs, UI, testing and build order.
+1. What We Are Actually Building
+Panagah is a web application that takes a structured shelter request and produces a small number of 3D shelter-component candidates. The important technical property is that the generated candidate is converted into a machine-readable design object and then evaluated by a separate deterministic validation service.
+USER INPUT  family + site + materials + environment                 ↓        CONSTRAINT BUILDER                 ↓          AI GENERATOR                 ↓      STRUCTURED DESIGN JSON                 ↓       GEOMETRY BUILDER                 ↓          3D VIEWER                 ↓     INDEPENDENT VALIDATOR                 ↓      PASS / FAIL / REVIEW                 ↓        ENGINEER REVIEW
+2. MVP: Keep the Design Problem Small
+Do not attempt to generate an entire house or a complete structural system in the first build. Pick one component family and make the whole pipeline work.
+MVP Decision
+Implementation
+Primary component
+Roof truss / roof-support assembly
+Secondary component
+Wall panel layout if time permits
+Design generation
+2–3 candidates per request
+Geometry
+Parametric geometry generated from structured dimensions
+Validation
+Deterministic pre-screening rules
+Final output
+3D model + validation evidence + review state
+Human decision
+Engineer review required
+3. Recommended Tech Stack
+Layer
+Technology
+Why
+Frontend
+Next.js + React + TypeScript
+Fast dashboard/app development
+3D
+Three.js + React Three Fiber
+Interactive browser-based 3D
+UI
+Tailwind CSS + component library
+Fast consistent interface
+Backend
+Python + FastAPI
+Good fit for AI and numerical validation
+AI
+Alibaba Cloud Model Studio / Qwen
+Sponsor-aligned generation layer
+Validation
+Python
+Easy deterministic engineering rules
+Database
+PostgreSQL
+Structured relational project/version data
+Queue
+Redis + worker
+Generation and validation jobs
+Artifacts
+Alibaba Cloud OSS
+3D/report files
+Deployment
+Alibaba Cloud compute/container service
+Hackathon sponsor alignment
+Important architecture choiceDo not put validation logic inside the LLM prompt and call that “validation.” Prompts can guide generation, but the authoritative checks must be executable application code.
+4. Repository Structure
+panagah/├── apps/│   ├── web/                 # Next.js frontend│   └── api/                 # FastAPI application├── services/│   ├── generator/           # Model Studio/Qwen adapter│   ├── geometry/             # Parametric geometry builder│   └── validator/            # Deterministic validation engine├── packages/│   ├── schema/               # Shared design JSON schemas│   └── types/                # Shared types/enums├── rules/│   ├── v1/                   # Versioned validation rules│   └── test_cases/           # Golden test designs├── db/│   ├── migrations/│   └── seed/├── tests/│   ├── unit/│   ├── integration/│   └── e2e/└── docs/
+This separation makes the generator replaceable and lets the validator be tested without the AI service.
+5. Database Design
+The database stores the case, its inputs, generated candidates, immutable design versions, validation runs and human decisions.
+Table
+Important Fields
+projects
+id, organization_id, name, status, created_by
+sites
+id, project_id, length_m, width_m, terrain, environment_id
+family_requirements
+id, project_id, occupants, accessibility_notes
+materials
+id, project_id, name, type, quantity, unit, dimensions
+material_properties
+id, material_id, property, value, unit, source, confidence
+constraint_sets
+id, project_id, version, payload_json
+designs
+id, project_id, design_type, status
+design_versions
+id, design_id, version, schema_version, design_json
+validation_runs
+id, design_version_id, rule_set_version, status, started_at
+validation_results
+id, validation_run_id, rule_id, status, measured, limit, evidence_json
+reviews
+id, design_version_id, reviewer_id, decision, comments
+audit_events
+id, project_id, actor_id, action, object_type, object_id, created_at
+Versioning ruleA validated design version is immutable. If geometry or constraints change, create a new DesignVersion and run validation again.
+6. The Constraint Builder
+The first backend operation is not AI generation. It is turning the user's form data into a clean constraint object.
+{  "occupancy": {"people": 6},  "site": {"length_m": 6.0, "width_m": 5.0},  "materials": [    {"id": "MAT-01", "type": "bamboo", "qty": 24,     "length_m": 4.5, "diameter_m": 0.06}  ],  "environment": {"scenario": "configured_case"},  "design_target": "roof_truss",  "unknowns": []}
+This object becomes the common input to both the AI generator and the validator. The AI sees it to design; the validator sees it to check.
+7. AI Generation: How It Actually Works
+The model should not be asked to invent a 3D mesh directly. For the MVP, the model generates a structured parametric design description. Our geometry service turns that description into the actual 3D representation.
+ConstraintSet   ↓Prompt + JSON schema   ↓Model Studio / Qwen   ↓Candidate JSON   ↓JSON Schema validation   ↓Canonical DesignVersion
+7.1 Example AI Output
+{  "design_type": "roof_truss",  "span_m": 4.2,  "height_m": 1.0,  "members": [    {"id":"M1","type":"beam","length_m":4.2,"material_id":"MAT-01"},    {"id":"M2","type":"brace","length_m":2.3,"material_id":"MAT-01"}  ],  "connections": [    {"a":"M1","b":"M2","type":"bolted"}  ]}
+The model may propose the topology and dimensions, but the application owns the schema, units, allowed component types and validation status.
+8. Parametric 3D Generation
+Once the design JSON is accepted, the geometry service creates the visual model. This is more reliable than asking the LLM to output arbitrary mesh data.
+Design JSON   ↓Component factory   ├── beam(length, diameter)   ├── panel(width, height, thickness)   ├── connector(position, type)   └── brace(start, end)   ↓Three.js scene   ↓GLB/GLTF + interactive viewer
+Each component keeps its component_id and material_id so the UI can highlight the exact physical element associated with a validation failure.
+9. 3D Viewer
+Feature
+Purpose
+Orbit / zoom / pan
+Inspect design
+Component selection
+Select individual members
+Dimensions toggle
+Show key measurements
+Material visibility
+See material allocation
+Validation overlay
+Highlight failed components
+Reset / fit view
+Reliable inspection
+Example: if member M4 violates a configured span or geometry rule, the validator returns component_id=M4 and the viewer highlights M4.
+10. Validation Engine Architecture
+validator/├── engine.py├── context.py├── aggregation.py├── rules/│   ├── geometry.py│   ├── materials.py│   ├── load_path.py│   ├── environment.py│   └── connections.py└── tests/
+Each rule is a normal function/class. It receives a validated DesignVersion plus a ValidationContext and returns a structured ValidationResult.
+11. Validation Context
+ValidationContext = {  "design": canonical_design,  "site": site_data,  "materials": material_data,  "environment": environment_data,  "rule_set_version": "1.0.0"}
+The validator never calls the LLM to decide the result.
+12. Rule Types
+Rule Type
+Example
+Result
+Geometry
+Required span/clearance constraint
+PASS / FAIL
+Material inventory
+Required quantity ≤ available quantity
+PASS / FAIL
+Material data
+Required property exists and has valid source
+PASS / REVIEW
+Load path
+Members/connectivity form a supported load path
+PASS / FAIL / REVIEW
+Environment
+Required environmental scenario exists
+PASS / REVIEW
+Connection
+Connection type is supported and required data exists
+PASS / REVIEW
+Engineering boundaryThe first implementation should only encode rules that the team can define and justify. Do not fabricate structural formulas just to make the demo look scientific. Where a real engineering capacity calculation is outside the MVP, return REVIEW.
+13. Example Deterministic Rule
+A simple material-inventory rule is fully deterministic:
+required_quantity = sum(component.quantity_required)available_quantity = material.quantityif required_quantity > available_quantity:    FAILelse:    PASS
+A geometry rule follows the same pattern:
+if design.span_m > configured_max_span_m:    FAILelse:    PASS
+More advanced structural calculations should be added only after their engineering assumptions, equations, units and sources have been reviewed.
+14. Rule Registry
+rules/v1/  R-GEO-001.yaml  R-MAT-001.yaml  R-MAT-002.yaml  R-ENV-001.yaml  R-CON-001.yaml
+Each rule file should contain: rule_id, version, severity, inputs, units, logic reference, source/reference, assumptions and test cases.
+rule_id: R-MAT-001version: 1.0.0severity: HIGHtype: HARDname: Material quantity availableinputs: [required_quantity, available_quantity]assumptions:  - Quantity is measured in the same unit
+15. Result Aggregation
+if any HARD rule == FAIL:    overall = FAILelif any MANDATORY rule == REVIEW:    overall = REVIEWelif any rule == ERROR:    overall = ERRORelse:    overall = PASS
+The frontend receives the result; it does not calculate it.
+16. API Flow
+POST /projects/{id}/generate        ↓create generation_job        ↓worker calls Model Studio        ↓validate JSON schema        ↓create DesignVersion        ↓POST internal /validate        ↓create ValidationRun + ValidationResults        ↓return candidate + status
+Endpoint
+Request
+Response
+POST /projects
+project details
+project_id
+POST /projects/{id}/generate
+constraint_set_id
+job_id
+GET /jobs/{id}
+—
+status/progress
+GET /designs/{id}
+—
+canonical design
+POST /designs/{id}/validate
+rule_set_version
+validation_run_id
+GET /designs/{id}/validation
+—
+results + evidence
+POST /designs/{id}/submit-review
+—
+review_id
+POST /reviews/{id}/decision
+decision + comment
+updated review
+17. Frontend State Flow
+ProjectForm   ↓POST project + inputs   ↓Generate button   ↓GenerationProgress   ↓CandidateList   ↓CandidateWorkspace   ├── 3DViewer   ├── DesignProperties   └── ValidationPanel             ↓        ReviewPanel
+The UI should never display “Safe” as the product status. Display “Automated checks passed” and keep “Engineer review required” visible.
+18. The Main Demo Case
+The demo should be engineered around a controlled pair of candidates.
+CASE INPUT6 people / 6×5 m site / bamboo inventory             ↓       CANDIDATE A       naive geometry             ↓       VALIDATOR             ↓       FAIL   ├─ span exceeded   ├─ material quantity exceeded   └─ connection review required             ↓      REGENERATE             ↓       CANDIDATE B             ↓       VALIDATOR             ↓ AUTOMATED CHECKS PASSED   + REVIEW: engineer check             ↓       ENGINEER DECISION
+This is much stronger than showing a beautiful 3D render because it demonstrates that the system actually reacts to constraints.
+19. Testing the Validator
+Test
+Expected
+Valid design
+PASS
+Span above configured limit
+FAIL
+Required material > inventory
+FAIL
+Missing required material property
+REVIEW
+Unsupported connection type
+REVIEW/FAIL according to rule
+Malformed design JSON
+Rejected before validation
+Validator exception
+ERROR
+Same design + same rule version twice
+Same result
+The golden test set should live in the repository and run automatically in CI.
+20. Build Order
+Step
+Build
+1
+Create PostgreSQL schema and project CRUD
+2
+Build requirements/material input UI
+3
+Create ConstraintSet builder
+4
+Implement canonical DesignVersion JSON schema
+5
+Connect Model Studio/Qwen generation
+6
+Build parametric roof-truss geometry generator
+7
+Build Three.js viewer
+8
+Implement 3–5 deterministic validation rules
+9
+Build validation evidence panel
+10
+Build engineer review + audit trail
+11
+Add end-to-end golden demo case
+12
+Deploy and polish
+Scope ruleIf time becomes tight, stop adding features. A complete generation → 3D → validation → review loop is more valuable than ten unfinished features.
+21. What We Need From Engineering Experts
+The CS team can build the software architecture, schemas, 3D pipeline, API and rule framework. A qualified structural/humanitarian engineering reviewer is needed to define or approve safety-critical rules and assumptions.
+Software Team Owns
+Engineer / Domain Expert Owns
+Data model
+Engineering assumptions
+AI integration
+Applicable engineering criteria
+3D representation
+Acceptable design limits
+Rule execution framework
+Rule equations/thresholds
+Validation aggregation
+Interpretation of safety evidence
+UI and audit system
+Final engineering decision
+22. Security Basics
+Authentication and role-based authorization.
+Organization-level project isolation.
+Server-side validation of every input.
+AI output treated as untrusted.
+Secrets stored as environment/secret-manager values.
+Audit trail for generation, validation and review.
+No client-controlled PASS/FAIL fields.
+23. What Is Explicitly NOT Being Built
+A fully autonomous structural engineer.
+A replacement for professional engineering approval.
+A complete building-code certification engine.
+A full finite-element analysis platform.
+A nationwide disaster-management system.
+A generic AI chatbot with a 3D model attached.
+24. Final Technical Definition
+PanagahA constraint-driven generative design system in which a web application collects field requirements, converts them into a canonical constraint model, uses Alibaba Cloud AI to generate structured shelter-component candidates, converts those candidates into parametric 3D geometry, and independently evaluates the same canonical design through a deterministic validation engine before presenting the evidence to a human engineer.
+25. Definition of a Successful MVP
+One real shelter component can be generated end-to-end.
+The generated design exists as structured JSON, not only an image.
+The same design JSON drives both the 3D viewer and validator.
+At least three meaningful deterministic validation rules work.
+A deliberately bad candidate visibly fails.
+A constrained candidate can pass the implemented checks.
+Every result identifies the rule and evidence behind it.
+An engineer can review the candidate and record a decision.
+The complete workflow can be reproduced from a clean project.
