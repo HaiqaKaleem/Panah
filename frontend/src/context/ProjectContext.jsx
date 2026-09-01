@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { projectsApi } from '../api/projects'
 import { sitesApi } from '../api/sites'
 import { designApi } from '../api/design'
@@ -94,8 +94,6 @@ export function ProjectProvider({ children }) {
           name: `${project.name} - Primary Site`,
           latitude: 33.6844,
           longitude: 73.0479,
-          soil_type: 'clay_loam',
-          hazard_zone: 'Zone 4',
         })
         siteList = [currentSite]
       } else {
@@ -115,7 +113,7 @@ export function ProjectProvider({ children }) {
         setConstraintSet(DEFAULT_CONSTRAINTS)
       } else {
         currentCsId = csList[0].id
-        setConstraintSet(csList[0].constraint_json || DEFAULT_CONSTRAINTS)
+        setConstraintSet(csList[0].constraints || DEFAULT_CONSTRAINTS)
       }
       setActiveConstraintSetId(currentCsId)
 
@@ -138,6 +136,11 @@ export function ProjectProvider({ children }) {
     }
   }, [loadDesignDetails])
 
+  const activeProjectRef = useRef(activeProject)
+  useEffect(() => {
+    activeProjectRef.current = activeProject
+  }, [activeProject])
+
   // Initial load: Fetch all projects or create a starter one
   const refreshProjects = useCallback(async () => {
     setLoading(true)
@@ -148,14 +151,13 @@ export function ProjectProvider({ children }) {
         const initial = await projectsApi.create({
           name: 'Panah Shelter Prototype Alpha',
           location: 'Mindanao, Philippines',
-          description: 'Emergency modular shelter system for monsoon and seismic recovery',
         })
         list = [initial]
       }
       setProjects(list)
 
       // Auto-select active project if none selected yet
-      if (!activeProject && list.length > 0) {
+      if (!activeProjectRef.current && list.length > 0) {
         await loadProjectData(list[0])
       }
     } catch (err) {
@@ -164,11 +166,11 @@ export function ProjectProvider({ children }) {
     } finally {
       setLoading(false)
     }
-  }, [activeProject, loadProjectData])
+  }, [loadProjectData])
 
   useEffect(() => {
     refreshProjects()
-  }, [refreshProjects])
+  }, [])
 
   // Switch to a project by ID
   const selectProject = async (projectId) => {
@@ -179,13 +181,12 @@ export function ProjectProvider({ children }) {
   }
 
   // Create a brand new project
-  const createNewProject = async ({ name, location, description }) => {
+  const createNewProject = async ({ name, location }) => {
     setLoading(true)
     try {
       const newProj = await projectsApi.create({
         name: name || 'New Humanitarian Shelter',
         location: location || 'South Asia Regional Site',
-        description: description || 'Generative structural design',
       })
       setProjects((prev) => [newProj, ...prev])
       await loadProjectData(newProj)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useProject } from '../context/ProjectContext'
 import Viewport3D from '../components/viewport/Viewport3D'
 import MaterialInputs from '../components/build/MaterialInputs'
@@ -22,6 +22,12 @@ export default function BuildPage() {
   } = useProject()
 
   const [currentMaterials, setCurrentMaterials] = useState(constraintSet?.materials || [])
+
+  useEffect(() => {
+    if (constraintSet?.materials) {
+      setCurrentMaterials(constraintSet.materials)
+    }
+  }, [constraintSet])
 
   const handleUpdateMaterials = (updatedMats) => {
     setCurrentMaterials(updatedMats)

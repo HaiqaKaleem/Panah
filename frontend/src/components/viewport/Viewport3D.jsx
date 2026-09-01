@@ -74,7 +74,136 @@ export default function Viewport3D({ geometryData, activeDesignName = 'Module Al
   const isDraggingRef = useRef(false)
   const prevMouseRef = useRef({ x: 0, y: 0 })
 
-  const initScene = useCallback(() => {
+  const autoRotateRef = useRef(autoRotate)
+  useEffect(() => {
+    autoRotateRef.current = autoRotate
+  }, [autoRotate])
+
+  // Build 3D Truss Objects from Geometry Data
+  const buildGeometry = useCallback(() => {
+    const modelGroup = modelGroupRef.current
+    if (!modelGroup) return
+
+    // Clear previous models
+    while (modelGroup.children.length > 0) {
+      const obj = modelGroup.children[0]
+      modelGroup.remove(obj)
+      if (obj.geometry) obj.geometry.dispose()
+      if (obj.material) {
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose())
+        else obj.material.dispose()
+      }
+    }
+
+    if (!geometryData || !geometryData.nodes) {
+      // Default parametric truss if no geometry data yet
+      createDefaultTruss(modelGroup)
+      return
+    }
+
+    // Convert nodes to array format whether it's an object or array
+    const nodeList = Array.isArray(geometryData.nodes)
+      ? geometryData.nodes
+      : Object.entries(geometryData.nodes).map(([id, pt]) => ({
+          id,
+          x: pt.x || 0,
+          y: pt.y || 0,
+          z: pt.z || 0,
+        }))
+
+    if (nodeList.length === 0) {
+      createDefaultTruss(modelGroup)
+      return
+    }
+
+    const nodeMap = new Map()
+    nodeList.forEach((n) => {
+      nodeMap.set(n.id, new THREE.Vector3(n.x || 0, n.y || 0, n.z || 0))
+    })
+
+    // Calculate center for orbital alignment
+    const center = new THREE.Vector3()
+    nodeList.forEach((n) => {
+      const pos = nodeMap.get(n.id)
+      if (pos) center.add(pos)
+    })
+    center.divideScalar(nodeList.length)
+    if (cameraRef.current) {
+      cameraRef.current.lookAt(center)
+    }
+
+    // Render Nodes (Spheres)
+    if (showNodes) {
+      const nodeGeo = new THREE.SphereGeometry(0.08, 16, 16)
+      const nodeMat = new THREE.MeshStandardMaterial({
+        color: 0x00ffcc,
+        emissive: 0x005544,
+        roughness: 0.3,
+        metalness: 0.8,
+      })
+
+      nodeList.forEach((n) => {
+        const mesh = new THREE.Mesh(nodeGeo, nodeMat)
+        const pos = nodeMap.get(n.id)
+        if (pos) {
+          mesh.position.copy(pos)
+          modelGroup.add(mesh)
+        }
+      })
+    }
+
+    // Render Members (Cylinders)
+    if (geometryData.members && Array.isArray(geometryData.members)) {
+      geometryData.members.forEach((m) => {
+        let p1 = null
+        let p2 = null
+
+        // If start is an object with x, y, z
+        if (m.start && typeof m.start === 'object' && typeof m.start.x === 'number') {
+          p1 = new THREE.Vector3(m.start.x, m.start.y, m.start.z)
+        } else if (typeof m.start === 'string' && nodeMap.has(m.start)) {
+          p1 = nodeMap.get(m.start)
+        } else if (m.start_node && nodeMap.has(m.start_node)) {
+          p1 = nodeMap.get(m.start_node)
+        }
+
+        // If end is an object with x, y, z
+        if (m.end && typeof m.end === 'object' && typeof m.end.x === 'number') {
+          p2 = new THREE.Vector3(m.end.x, m.end.y, m.end.z)
+        } else if (typeof m.end === 'string' && nodeMap.has(m.end)) {
+          p2 = nodeMap.get(m.end)
+        } else if (m.end_node && nodeMap.has(m.end_node)) {
+          p2 = nodeMap.get(m.end_node)
+        }
+
+        if (!p1 || !p2) return
+
+        const dir = new THREE.Vector3().subVectors(p2, p1)
+        const len = dir.length()
+        if (len < 0.001) return
+
+        const color = TYPE_COLORS[m.type] || 0x8b7355
+        const radius = Math.max(0.03, (m.diameter || m.diameter_m || 0.08) / 2)
+
+        const memberGeo = new THREE.CylinderGeometry(radius, radius, len, 12)
+        const memberMat = new THREE.MeshStandardMaterial({
+          color,
+          roughness: 0.6,
+          metalness: 0.2,
+          wireframe,
+        })
+
+        const memberMesh = new THREE.Mesh(memberGeo, memberMat)
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5)
+        memberMesh.position.copy(mid)
+        memberMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize())
+
+        modelGroup.add(memberMesh)
+      })
+    }
+  }, [geometryData, showNodes, wireframe])
+
+  useEffect(() => {
     if (!mountRef.current) return
 
     const container = mountRef.current
@@ -97,6 +226,7 @@ export default function Viewport3D({ geometryData, activeDesignName = 'Module Al
     renderer.setSize(width, height)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
     rendererRef.current = renderer
 
     container.innerHTML = ''
@@ -125,9 +255,12 @@ export default function Viewport3D({ geometryData, activeDesignName = 'Module Al
     scene.add(modelGroup)
     modelGroupRef.current = modelGroup
 
+    // Initial geometry build
+    buildGeometry()
+
     // Animation Loop
     const animate = () => {
-      if (modelGroupRef.current && autoRotate) {
+      if (modelGroupRef.current && autoRotateRef.current) {
         modelGroupRef.current.rotation.y += 0.005
       }
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
@@ -152,93 +285,11 @@ export default function Viewport3D({ geometryData, activeDesignName = 'Module Al
       window.removeEventListener('resize', handleResize)
       if (frameIdRef.current) cancelAnimationFrame(frameIdRef.current)
       renderer.dispose()
-    }
-  }, [autoRotate])
-
-  // Build 3D Truss Objects from Geometry Data
-  const buildGeometry = useCallback(() => {
-    const modelGroup = modelGroupRef.current
-    if (!modelGroup) return
-
-    // Clear previous models
-    while (modelGroup.children.length > 0) {
-      const obj = modelGroup.children[0]
-      modelGroup.remove(obj)
-      if (obj.geometry) obj.geometry.dispose()
-      if (obj.material) {
-        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose())
-        else obj.material.dispose()
+      if (container && renderer.domElement && container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement)
       }
     }
-
-    if (!geometryData || !geometryData.nodes || geometryData.nodes.length === 0) {
-      // Default parametric truss if no geometry data yet
-      createDefaultTruss(modelGroup)
-      return
-    }
-
-    const nodeMap = new Map()
-    geometryData.nodes.forEach((n) => {
-      nodeMap.set(n.id, new THREE.Vector3(n.x || 0, n.y || 0, n.z || 0))
-    })
-
-    // Calculate center for orbital alignment
-    const center = new THREE.Vector3()
-    geometryData.nodes.forEach((n) => center.add(nodeMap.get(n.id)))
-    center.divideScalar(geometryData.nodes.length)
-    if (cameraRef.current) {
-      cameraRef.current.lookAt(center)
-    }
-
-    // Render Nodes (Spheres)
-    if (showNodes) {
-      const nodeGeo = new THREE.SphereGeometry(0.08, 16, 16)
-      const nodeMat = new THREE.MeshStandardMaterial({
-        color: 0x00ffcc,
-        emissive: 0x005544,
-        roughness: 0.3,
-        metalness: 0.8,
-      })
-
-      geometryData.nodes.forEach((n) => {
-        const mesh = new THREE.Mesh(nodeGeo, nodeMat)
-        const pos = nodeMap.get(n.id)
-        if (pos) {
-          mesh.position.copy(pos)
-          modelGroup.add(mesh)
-        }
-      })
-    }
-
-    // Render Members (Cylinders)
-    if (geometryData.members) {
-      geometryData.members.forEach((m) => {
-        const p1 = nodeMap.get(m.start || m.start_node)
-        const p2 = nodeMap.get(m.end || m.end_node)
-        if (!p1 || !p2) return
-
-        const dir = new THREE.Vector3().subVectors(p2, p1)
-        const len = dir.length()
-        const color = TYPE_COLORS[m.type] || 0x8b7355
-        const radius = Math.max(0.03, (m.diameter || 0.08) / 2)
-
-        const memberGeo = new THREE.CylinderGeometry(radius, radius, len, 12)
-        const memberMat = new THREE.MeshStandardMaterial({
-          color,
-          roughness: 0.6,
-          metalness: 0.2,
-          wireframe,
-        })
-
-        const memberMesh = new THREE.Mesh(memberGeo, memberMat)
-        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5)
-        memberMesh.position.copy(mid)
-        memberMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize())
-
-        modelGroup.add(memberMesh)
-      })
-    }
-  }, [geometryData, showNodes, wireframe])
+  }, [buildGeometry])
 
   // Pointer Drag Interaction
   const handlePointerDown = (e) => {
@@ -284,10 +335,6 @@ export default function Viewport3D({ geometryData, activeDesignName = 'Module Al
       cameraRef.current.lookAt(3, 1.5, 2.5)
     }
   }
-
-  useEffect(() => {
-    initScene()
-  }, [initScene])
 
   useEffect(() => {
     buildGeometry()

@@ -2,8 +2,8 @@ import { CheckCircle2, AlertCircle, XCircle, ClipboardCheck } from 'lucide-react
 
 export default function CompliancePrescreen({ designDetail }) {
   // If the backend has rules evaluation, parse it
-  const rules = designDetail?.rules?.rule_evaluations || []
-  const compliance = designDetail?.rules?.compliance || {}
+  const rules = designDetail?.rules?.results || designDetail?.rules?.rule_evaluations || []
+  const compliance = designDetail?.rules?.compliance || designDetail?.rules?.summary || {}
 
   // Build items from backend or default standard rule checks
   const defaultItems = [

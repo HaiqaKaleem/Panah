@@ -66,9 +66,21 @@ export async function apiClient(endpoint, options = {}) {
     const data = isJson ? await response.json() : await response.text()
 
     if (!response.ok) {
-      const errorMessage =
-        (data && typeof data === 'object' && (data.detail || data.message || data.error)) ||
-        `Request failed with status ${response.status}`
+      let errorMessage = `Request failed with status ${response.status}`
+      if (data && typeof data === 'object') {
+        if (data.details && Array.isArray(data.details)) {
+          const detailMsg = data.details
+            .map((d) => (d.field ? `${d.field}: ${d.message}` : d.message || JSON.stringify(d)))
+            .join('; ')
+          errorMessage = `${data.message || 'Validation error'} (${detailMsg})`
+        } else if (data.detail) {
+          errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)
+        } else if (data.message) {
+          errorMessage = data.message
+        } else if (data.error) {
+          errorMessage = typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
+        }
+      }
       throw new ApiError(errorMessage, response.status, data)
     }
 
