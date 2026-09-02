@@ -7,8 +7,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-import bcrypt
 from jose import JWTError, jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from app.auth.schemas import TokenData, UserResponse
@@ -19,26 +19,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 # ── Password Hashing ──────────────────────────────────────────────────
-def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode("utf-8")[:72], salt).decode("utf-8")
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    try:
-        return bcrypt.checkpw(
-            plain_password.encode("utf-8")[:72],
-            hashed_password.encode("utf-8"),
-        )
-    except Exception:
-        return False
-
-class _PwdContext:
-    def hash(self, secret: str) -> str:
-        return hash_password(secret)
-    def verify(self, secret: str, hash_str: str) -> bool:
-        return verify_password(secret, hash_str)
-
-pwd_context = _PwdContext()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ── OAuth2 Scheme ─────────────────────────────────────────────────────
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -122,6 +103,15 @@ def verify_token(token: str) -> TokenData:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {str(e)}",
         )
+
+
+# ── Password Functions ────────────────────────────────────────────────
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 # ── User Functions ────────────────────────────────────────────────────

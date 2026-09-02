@@ -113,7 +113,7 @@ def update_site(
     # Explicitly prevent clearing the required name.
     if "name" in updates and updates["name"] is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="name cannot be null",
         )
 

@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore::DeprecationWarning:httpx",
+    "ignore:.*httpx.*starlette.*:DeprecationWarning",
+    "ignore:.*httpx.*starlette.*",
+]

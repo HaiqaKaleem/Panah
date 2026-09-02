@@ -137,7 +137,7 @@ def generate_designs(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
@@ -240,7 +240,7 @@ def update_generated_design_status(
 
     if status_value not in {"selected", "rejected", "generated"}:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="status must be selected, rejected, or generated",
         )
 

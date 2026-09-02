@@ -103,13 +103,13 @@ def upload_media(
 
     if latitude is not None and not -90 <= latitude <= 90:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid latitude",
         )
 
     if longitude is not None and not -180 <= longitude <= 180:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid longitude",
         )
 
