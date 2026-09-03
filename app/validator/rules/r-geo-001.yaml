@@ -1,0 +1,16 @@
+id: R-GEO-001
+name: Span must not exceed site dimensions
+description: "The design span must not exceed the available site length."
+category: geometry
+severity: hard
+reference: "Physical site constraint — beam cannot span beyond site boundary"
+tags: [geometry, structural]
+
+rule:
+  method: field_lte_field
+  field_a: design.span_m
+  field_b: constraints.site.length_m
+
+messages:
+  pass: "Design span is within site dimensions"
+  fail: "Design span ({value_a}m) exceeds site length ({value_b}m)"
